@@ -670,7 +670,7 @@ from fastapi import FastAPI, Request
 from aiogram.types import Update
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from starlette.responses import Response
-from main_config import bot, dp, router, admin_router  # adjust this if needed
+#from main_config import bot, dp, router, admin_router  # adjust this if needed
 
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://websmmhook.onrender.com{WEBHOOK_PATH}"
