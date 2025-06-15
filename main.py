@@ -671,7 +671,7 @@ from starlette.responses import Response
 import uvicorn
 
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://your-render-url.onrender.com{WEBHOOK_PATH}"  # Replace with your Render URL
+WEBHOOK_URL = f"https://websmmhook.onrender.com{WEBHOOK_PATH}" # Replace with your Render URL
 
 app = FastAPI()
 
