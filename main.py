@@ -172,10 +172,26 @@ async def cancel_any(message: Message, state: FSMContext):
 
 
 # --- My Wallet Handler ---
+# --- My Wallet Handler ---
 @router.message(lambda m: m.text == "💰 My Wallet")
 async def show_wallet(m: Message):
-    bal = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()[0]
+    conn = sqlite3.connect("data.db")
+    cur = conn.cursor()
+
+    # Check if user exists
+    result = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
+
+    if result:
+        bal = result[0]
+    else:
+        bal = 0.0
+        cur.execute("INSERT INTO users (user_id, balance) VALUES (?, ?)", (m.from_user.id, bal))
+        conn.commit()
+
     await m.answer(f"💵 Current Balance: ₹{bal:.2f}")
+
+    conn.close()
+
 @router.message(F.text == "💰 Add Balance")
 async def prompt_amount(m: Message, state: FSMContext):
     bonus_msg = (
