@@ -73,38 +73,35 @@ conn = sqlite3.connect("db.sqlite3", check_same_thread=False)
 cur = conn.cursor()
 
 # Create tables if they do not exist
-cur.executescript("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    name TEXT,
-    phone TEXT,
-    balance REAL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    txn_id TEXT UNIQUE NOT NULL,
-    status TEXT DEFAULT 'pending',
-    FOREIGN KEY(user_id) REFERENCES users(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    order_id TEXT NOT NULL,
-    service_name TEXT NOT NULL,
-    link TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    price REAL NOT NULL,
-    status TEXT DEFAULT 'processing',
-    FOREIGN KEY(user_id) REFERENCES users(user_id)
-);
-""")
-
-# Commit changes
-conn.commit()
+def initialize_database():
+    with sqlite3.connect("db.sqlite3") as conn:
+        cur = conn.cursor()
+        cur.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT,
+            phone TEXT,
+            balance REAL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            amount REAL,
+            txn_id TEXT UNIQUE,
+            status TEXT DEFAULT 'pending'
+        );
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            order_id TEXT,
+            service_name TEXT,
+            link TEXT,
+            quantity INTEGER,
+            price REAL,
+            status TEXT
+        );
+        """)
+        conn.commit()
 
 # --- STATES ---
 class Register(StatesGroup):
@@ -705,6 +702,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def on_startup():
+     initialize_database()
     dp.include_router(router)
     dp.include_router(admin_router)
     dp.services_cache = []
