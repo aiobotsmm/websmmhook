@@ -664,16 +664,19 @@ async def update_all_orders(message: Message):
 
 # --- Bot Startup ---
 # --- Webhook Setup with FastAPI ---
+# --- Webhook Setup with FastAPI ---
+import logging
 from fastapi import FastAPI, Request
-from aiogram import Dispatcher
+from aiogram.types import Update
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from starlette.responses import Response
-import uvicorn
+from main_config import bot, dp, router, admin_router  # adjust this if needed
 
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://websmmhook.onrender.com{WEBHOOK_PATH}" # Replace with your Render URL
+WEBHOOK_URL = f"https://websmmhook.onrender.com{WEBHOOK_PATH}"
 
 app = FastAPI()
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -681,18 +684,27 @@ async def on_startup():
     dp.include_router(admin_router)
     dp.services_cache = []
     await bot.set_webhook(WEBHOOK_URL)
-    logging.info("🚀 Webhook set successfully")
+    logging.info("✅ Webhook set at " + WEBHOOK_URL)
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
     await bot.delete_webhook()
     logging.info("❌ Webhook deleted")
 
+
 @app.post(WEBHOOK_PATH)
 async def handle_webhook(request: Request):
-    update = await request.json()
+    data = await request.json()
+    update = Update.model_validate(data)  # Use model_validate for Pydantic v2
     await dp.feed_update(bot, update)
     return Response(status_code=200)
+
+
+@app.get("/")
+async def root():
+    return {"status": "Bot is alive"}
+
 
 # Run using Uvicorn when hosted locally (won't run in __main__ on Render)
 if __name__ == "__main__":
