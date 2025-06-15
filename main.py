@@ -702,7 +702,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def on_startup():
-     initialize_database()
+    initialize_database()
     dp.include_router(router)
     dp.include_router(admin_router)
     dp.services_cache = []
