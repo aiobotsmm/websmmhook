@@ -19,7 +19,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import BufferedInputFile
 from aiogram.types import InlineKeyboardMarkup
-#from states import Register, AddBalance
+
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 # --- CONFIG ---
 
@@ -145,65 +145,39 @@ def upi_keyboard():
         [InlineKeyboardButton(text="✅ I Paid", callback_data="paid_done")]
     ])
 # --- ROUTER SETUP ---
-from aiogram import Router, F
-from aiogram.types import Message
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from states import Register  # make sure you have this FSM
-from keyboards import main_menu  # your custom keyboard
-
 router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
     try:
         row = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
-
-        if row:
-            balance = row[0] or 0
-            await m.answer(
-                f"👋 Welcome back!\n💰 Balance: ₹{balance:.2f}",
-                reply_markup=main_menu(balance)
-            )
-            await state.clear()
+        if row and row[0] is not None:
+            bal = row[0]
+            await m.answer(f"👋 Welcome back!\n💰 Balance: ₹{bal:.2f}", reply_markup=main_menu(bal))
         else:
             await m.answer("👋 Welcome! Please enter your full name:")
             await state.set_state(Register.name)
-
     except Exception as e:
-        await m.answer("⚠️ An error occurred. Please try again later.")
+        await m.answer("⚠️ An error occurred in /start.")
         print(f"Error in /start: {e}")
+
+    await state.set_state(Register.name)
 
 @router.message(Register.name)
 async def reg_name(m: Message, state: FSMContext):
     await state.update_data(name=m.text.strip())
-    await m.answer("📞 Please enter your phone number:")
+    await m.answer("📞 Enter your phone number:")
     await state.set_state(Register.phone)
 
 @router.message(Register.phone)
 async def reg_phone(m: Message, state: FSMContext):
     data = await state.get_data()
-    name = data.get("name")
-    phone = m.text.strip()
-
-    try:
-        cur.execute(
-            "INSERT OR IGNORE INTO users(user_id, name, phone) VALUES (?, ?, ?)",
-            (m.from_user.id, name, phone)
-        )
-        conn.commit()
-
-        # Get fresh balance
-        row = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
-        balance = row[0] if row else 0
-
-        await m.answer("✅ Registration complete!", reply_markup=main_menu(balance))
-        await state.clear()
-
-    except Exception as e:
-        await m.answer("⚠️ Registration failed. Please try again.")
-        print(f"Error during registration: {e}")
-        await state.clear()
+    name, phone = data["name"], m.text.strip()
+    cur.execute("INSERT OR IGNORE INTO users(user_id, name, phone) VALUES (?, ?, ?)", (m.from_user.id, name, phone))
+    conn.commit()
+    await m.answer("✅ Registration complete!", reply_markup=main_menu())
+    await state.clear()
 
 
 # --- Cancel Command (Global)
@@ -286,84 +260,27 @@ async def ask_txnid(c: CallbackQuery, state: FSMContext):
     await c.message.answer("📥 Enter your UPI Transaction ID:")
     await c.answer()
 
-from aiogram import Router, F
-from aiogram.types import (
-    Message, CallbackQuery,
-    InlineKeyboardMarkup, InlineKeyboardButton
-)
-from aiogram.fsm.context import FSMContext
-import sqlite3
-
-# --- DB setup (make sure you already connected) ---
-# conn = sqlite3.connect("db.sqlite3", check_same_thread=False)
-# cur = conn.cursor()
-
-# --- Constants ---
-ADMIN_ID = 123456789  # Replace with your admin Telegram ID
-
-# --- Router ---
-router = Router()
-
-# --- Save Payment Request ---
-@router.message(AddBalance.txn_id)  # FSM state where user enters txn_id
+@router.message(AddBalance.txn_id)
 async def save_txnid(m: Message, state: FSMContext):
     d = await state.get_data()
     amount, txn_id = d["amount"], m.text.strip()
 
     try:
-        cur.execute(
-            "INSERT INTO payments(user_id, amount, txn_id) VALUES (?, ?, ?)",
-            (m.from_user.id, amount, txn_id)
-        )
+        cur.execute("INSERT INTO payments(user_id, amount, txn_id) VALUES (?, ?, ?)", (m.from_user.id, amount, txn_id))
         conn.commit()
     except sqlite3.IntegrityError:
         return await m.answer("❗ This transaction ID is already used.")
 
     approve_btn = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Approve", callback_data=f"ap_{m.from_user.id}_{amount}_{txn_id}")],
-        [InlineKeyboardButton(text="❌ Decline", callback_data=f"de_{m.from_user.id}_{amount}_{txn_id}")]
+        [InlineKeyboardButton(text="✅ Approve", callback_data=f"ap_{m.from_user.id}_{amount}")],
+        [InlineKeyboardButton(text="❌ Decline", callback_data=f"de_{m.from_user.id}_{amount}")]
     ])
 
+    await bot.send_message(ADMIN_ID, f"🧾 New Payment Request\nUser: {m.from_user.id}\nAmount: ₹{amount}\nTxn ID: {txn_id}", reply_markup=approve_btn)
     await m.answer("✅ Submitted for approval. You’ll be notified once processed.")
-    await bot.send_message(
-        ADMIN_ID,
-        f"🧾 New Payment Request\n👤 User ID: {m.from_user.id}\n💸 Amount: ₹{amount}\n🧾 Txn ID: `{txn_id}`",
-        reply_markup=approve_btn,
-        parse_mode="Markdown"
-    )
     await state.clear()
 
-# --- Approve Payment ---
-@router.callback_query(F.data.startswith("ap_"))
-async def approve_payment(callback: CallbackQuery):
-    _, uid, amt, txn = callback.data.split("_")
-    user_id = int(uid)
-    amount = float(amt)
-
-    # Update user balance
-    cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
-    # Update payment status
-    cur.execute("UPDATE payments SET status = 'approved' WHERE txn_id = ?", (txn,))
-    conn.commit()
-
-    await callback.message.edit_text("✅ Payment Approved!")
-    await bot.send_message(user_id, f"✅ ₹{amount:.2f} has been added to your wallet.")
-
-# --- Decline Payment ---
-@router.callback_query(F.data.startswith("de_"))
-async def decline_payment(callback: CallbackQuery):
-    _, uid, amt, txn = callback.data.split("_")
-    user_id = int(uid)
-    amount = float(amt)
-
-    cur.execute("UPDATE payments SET status = 'declined' WHERE txn_id = ?", (txn,))
-    conn.commit()
-
-    await callback.message.edit_text("❌ Payment Declined.")
-    await bot.send_message(user_id, f"❌ Your payment of ₹{amount:.2f} was declined.")
-
-
-'''# --- Handle Admin Approval (Approve/Decline Payments) ---
+# --- Handle Admin Approval (Approve/Decline Payments) ---
 @router.callback_query(F.data.startswith(("ap_", "de_")))
 async def handle_payment_decision(c: CallbackQuery):
     action, uid, amt = c.data.split("_")
@@ -381,7 +298,7 @@ async def handle_payment_decision(c: CallbackQuery):
     else:
         await bot.send_message(uid, f"❌ Your ₹{amt:.2f} payment was declined.")
     conn.commit()
-    await c.answer()'''
+    await c.answer()
 
 
 
@@ -751,7 +668,6 @@ async def get_group_id(m: Message):
 
 GROUP_ID = -4651688106  # Replace with your actual group ID
 
-
 @router.message(Command("testgroup"))
 async def test_group_send(m: Message):
     await bot.send_message(GROUP_ID, "✅ Bot is able to send messages to this group!")
@@ -819,10 +735,6 @@ from fastapi import FastAPI, Request
 from aiogram.types import Update
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from starlette.responses import Response
-from starlette.responses import JSONResponse
-from aiogram import Bot, Dispatcher
-from aiogram.types import Update
-#from your_module import bot, dp, router, admin_router, initialize_database
 #from main_config import bot, dp, router, admin_router  # adjust this if needed
 
 WEBHOOK_PATH = "/webhook"
@@ -834,23 +746,25 @@ async def on_startup():
     dp.include_router(router)
     dp.include_router(admin_router)
     dp.services_cache = []
-    await bot.set_webhook("https://websmmhook.onrender.com/webhook")
+    await bot.set_webhook(WEBHOOK_URL)
     logging.info("🚀 Webhook set successfully")
+
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
     await bot.delete_webhook()
     logging.info("❌ Webhook deleted")
 
+
+from aiogram.types import Update
 @app.post(WEBHOOK_PATH)
-async def webhook_handler(request: Request):
-    try:
-        update = Update.model_validate(await request.json())  # ✅ safe parsing
-        await dp.feed_update(bot, update)
-    except Exception as e:
-        logging.error(f"❌ Webhook processing error: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-    return JSONResponse(status_code=200, content={"ok": True})
+async def handle_webhook(request: Request):
+    data = await request.json()
+    update = Update(**data)  # ✅ Correct parsing
+    await dp.feed_update(bot, update)
+    return Response(status_code=200)
+
 
 
 
