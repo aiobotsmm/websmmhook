@@ -834,7 +834,7 @@ async def on_startup():
     dp.include_router(router)
     dp.include_router(admin_router)
     dp.services_cache = []
-    await bot.set_webhook(WEBHOOK_URL)
+    await bot.set_webhook("https://websmmhook.onrender.com/webhook")
     logging.info("🚀 Webhook set successfully")
 
 @app.on_event("shutdown")
