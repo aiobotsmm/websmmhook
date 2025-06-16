@@ -723,10 +723,7 @@ from starlette.responses import Response
 
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://websmmhook.onrender.com{WEBHOOK_PATH}"
-
 app = FastAPI()
-
-
 @app.on_event("startup")
 async def on_startup():
     initialize_database()  # 💥 MAKE SURE THIS IS INCLUDED
@@ -746,10 +743,15 @@ async def on_shutdown():
 
 @app.post(WEBHOOK_PATH)
 async def handle_webhook(request: Request):
-    data = await request.json()
-    update = Update.model_validate(data)  # Use model_validate for Pydantic v2
-    await dp.feed_update(bot, update)
-    return Response(status_code=200)
+    try:
+        update = await request.json()
+        await dp.feed_update(bot, update)
+        return Response(status_code=200)
+    except Exception as e:
+        import traceback
+        print("❌ Webhook error:\n", traceback.format_exc())  # Shows error in logs
+        return Response(status_code=500)
+
 
 
 @app.get("/")
