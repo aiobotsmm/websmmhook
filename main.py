@@ -666,6 +666,14 @@ async def get_group_id(m: Message):
         print(f"Group ID: {m.chat.id}")
         await m.answer(f"This group's chat ID is: `{m.chat.id}`", parse_mode="Markdown")
 
+GROUP_ID = -4651688106  # Replace with your actual group ID
+
+@router.message(Command("testgroup"))
+async def test_group_send(m: Message):
+    await bot.send_message(GROUP_ID, "✅ Bot is able to send messages to this group!")
+    await m.answer("Test message sent to the group.")
+
+
 
 #orderupdate
 from aiogram.filters import Command
