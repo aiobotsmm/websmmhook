@@ -69,6 +69,7 @@ async def handle_webhook(request: Request):
 
 # --- DB ---
 # Initialize the database connection
+import sqlite3
 conn = sqlite3.connect("db.sqlite3", check_same_thread=False)
 cur = conn.cursor()
 
@@ -182,11 +183,20 @@ async def cancel_any(message: Message, state: FSMContext):
 
 
 # --- My Wallet Handler ---
-# --- My Wallet Handler ---
 @router.message(lambda m: m.text == "💰 My Wallet")
 async def show_wallet(m: Message):
     conn = sqlite3.connect("data.db")
     cur = conn.cursor()
+
+    # Ensure users table exists
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        name TEXT,
+        phone TEXT,
+        balance REAL DEFAULT 0
+    )
+    """)
 
     # Check if user exists
     result = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
