@@ -822,7 +822,7 @@ from starlette.responses import Response
 from starlette.responses import JSONResponse
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
-from your_module import bot, dp, router, admin_router, initialize_database
+#from your_module import bot, dp, router, admin_router, initialize_database
 #from main_config import bot, dp, router, admin_router  # adjust this if needed
 
 WEBHOOK_PATH = "/webhook"
