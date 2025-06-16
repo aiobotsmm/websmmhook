@@ -145,39 +145,65 @@ def upi_keyboard():
         [InlineKeyboardButton(text="✅ I Paid", callback_data="paid_done")]
     ])
 # --- ROUTER SETUP ---
+from aiogram import Router, F
+from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from states import Register  # make sure you have this FSM
+from keyboards import main_menu  # your custom keyboard
+
 router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
     try:
         row = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
-        if row and row[0] is not None:
-            bal = row[0]
-            await m.answer(f"👋 Welcome back!\n💰 Balance: ₹{bal:.2f}", reply_markup=main_menu(bal))
+
+        if row:
+            balance = row[0] or 0
+            await m.answer(
+                f"👋 Welcome back!\n💰 Balance: ₹{balance:.2f}",
+                reply_markup=main_menu(balance)
+            )
+            await state.clear()
         else:
             await m.answer("👋 Welcome! Please enter your full name:")
             await state.set_state(Register.name)
-    except Exception as e:
-        await m.answer("⚠️ An error occurred in /start.")
-        print(f"Error in /start: {e}")
 
-    await state.set_state(Register.name)
+    except Exception as e:
+        await m.answer("⚠️ An error occurred. Please try again later.")
+        print(f"Error in /start: {e}")
 
 @router.message(Register.name)
 async def reg_name(m: Message, state: FSMContext):
     await state.update_data(name=m.text.strip())
-    await m.answer("📞 Enter your phone number:")
+    await m.answer("📞 Please enter your phone number:")
     await state.set_state(Register.phone)
 
 @router.message(Register.phone)
 async def reg_phone(m: Message, state: FSMContext):
     data = await state.get_data()
-    name, phone = data["name"], m.text.strip()
-    cur.execute("INSERT OR IGNORE INTO users(user_id, name, phone) VALUES (?, ?, ?)", (m.from_user.id, name, phone))
-    conn.commit()
-    await m.answer("✅ Registration complete!", reply_markup=main_menu())
-    await state.clear()
+    name = data.get("name")
+    phone = m.text.strip()
+
+    try:
+        cur.execute(
+            "INSERT OR IGNORE INTO users(user_id, name, phone) VALUES (?, ?, ?)",
+            (m.from_user.id, name, phone)
+        )
+        conn.commit()
+
+        # Get fresh balance
+        row = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
+        balance = row[0] if row else 0
+
+        await m.answer("✅ Registration complete!", reply_markup=main_menu(balance))
+        await state.clear()
+
+    except Exception as e:
+        await m.answer("⚠️ Registration failed. Please try again.")
+        print(f"Error during registration: {e}")
+        await state.clear()
 
 
 # --- Cancel Command (Global)
@@ -260,27 +286,84 @@ async def ask_txnid(c: CallbackQuery, state: FSMContext):
     await c.message.answer("📥 Enter your UPI Transaction ID:")
     await c.answer()
 
-@router.message(AddBalance.txn_id)
+from aiogram import Router, F
+from aiogram.types import (
+    Message, CallbackQuery,
+    InlineKeyboardMarkup, InlineKeyboardButton
+)
+from aiogram.fsm.context import FSMContext
+import sqlite3
+
+# --- DB setup (make sure you already connected) ---
+# conn = sqlite3.connect("db.sqlite3", check_same_thread=False)
+# cur = conn.cursor()
+
+# --- Constants ---
+ADMIN_ID = 123456789  # Replace with your admin Telegram ID
+
+# --- Router ---
+router = Router()
+
+# --- Save Payment Request ---
+@router.message(AddBalance.txn_id)  # FSM state where user enters txn_id
 async def save_txnid(m: Message, state: FSMContext):
     d = await state.get_data()
     amount, txn_id = d["amount"], m.text.strip()
 
     try:
-        cur.execute("INSERT INTO payments(user_id, amount, txn_id) VALUES (?, ?, ?)", (m.from_user.id, amount, txn_id))
+        cur.execute(
+            "INSERT INTO payments(user_id, amount, txn_id) VALUES (?, ?, ?)",
+            (m.from_user.id, amount, txn_id)
+        )
         conn.commit()
     except sqlite3.IntegrityError:
         return await m.answer("❗ This transaction ID is already used.")
 
     approve_btn = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Approve", callback_data=f"ap_{m.from_user.id}_{amount}")],
-        [InlineKeyboardButton(text="❌ Decline", callback_data=f"de_{m.from_user.id}_{amount}")]
+        [InlineKeyboardButton(text="✅ Approve", callback_data=f"ap_{m.from_user.id}_{amount}_{txn_id}")],
+        [InlineKeyboardButton(text="❌ Decline", callback_data=f"de_{m.from_user.id}_{amount}_{txn_id}")]
     ])
 
-    await bot.send_message(ADMIN_ID, f"🧾 New Payment Request\nUser: {m.from_user.id}\nAmount: ₹{amount}\nTxn ID: {txn_id}", reply_markup=approve_btn)
     await m.answer("✅ Submitted for approval. You’ll be notified once processed.")
+    await bot.send_message(
+        ADMIN_ID,
+        f"🧾 New Payment Request\n👤 User ID: {m.from_user.id}\n💸 Amount: ₹{amount}\n🧾 Txn ID: `{txn_id}`",
+        reply_markup=approve_btn,
+        parse_mode="Markdown"
+    )
     await state.clear()
 
-# --- Handle Admin Approval (Approve/Decline Payments) ---
+# --- Approve Payment ---
+@router.callback_query(F.data.startswith("ap_"))
+async def approve_payment(callback: CallbackQuery):
+    _, uid, amt, txn = callback.data.split("_")
+    user_id = int(uid)
+    amount = float(amt)
+
+    # Update user balance
+    cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+    # Update payment status
+    cur.execute("UPDATE payments SET status = 'approved' WHERE txn_id = ?", (txn,))
+    conn.commit()
+
+    await callback.message.edit_text("✅ Payment Approved!")
+    await bot.send_message(user_id, f"✅ ₹{amount:.2f} has been added to your wallet.")
+
+# --- Decline Payment ---
+@router.callback_query(F.data.startswith("de_"))
+async def decline_payment(callback: CallbackQuery):
+    _, uid, amt, txn = callback.data.split("_")
+    user_id = int(uid)
+    amount = float(amt)
+
+    cur.execute("UPDATE payments SET status = 'declined' WHERE txn_id = ?", (txn,))
+    conn.commit()
+
+    await callback.message.edit_text("❌ Payment Declined.")
+    await bot.send_message(user_id, f"❌ Your payment of ₹{amount:.2f} was declined.")
+
+
+'''# --- Handle Admin Approval (Approve/Decline Payments) ---
 @router.callback_query(F.data.startswith(("ap_", "de_")))
 async def handle_payment_decision(c: CallbackQuery):
     action, uid, amt = c.data.split("_")
@@ -298,7 +381,7 @@ async def handle_payment_decision(c: CallbackQuery):
     else:
         await bot.send_message(uid, f"❌ Your ₹{amt:.2f} payment was declined.")
     conn.commit()
-    await c.answer()
+    await c.answer()'''
 
 
 
@@ -667,6 +750,7 @@ async def get_group_id(m: Message):
         await m.answer(f"This group's chat ID is: `{m.chat.id}`", parse_mode="Markdown")
 
 GROUP_ID = -4651688106  # Replace with your actual group ID
+
 
 @router.message(Command("testgroup"))
 async def test_group_send(m: Message):
