@@ -19,7 +19,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import BufferedInputFile
 from aiogram.types import InlineKeyboardMarkup
-from states import Register, AddBalance
+#from states import Register, AddBalance
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 # --- CONFIG ---
 
