@@ -659,6 +659,14 @@ async def stats_cmd(m: Message):
     )
     await m.answer(msg)
 
+#groupdata 
+@router.message()
+async def get_group_id(m: Message):
+    if m.chat.type in ("group", "supergroup"):
+        print(f"Group ID: {m.chat.id}")
+        await m.answer(f"This group's chat ID is: `{m.chat.id}`", parse_mode="Markdown")
+
+
 #orderupdate
 from aiogram.filters import Command
 from aiogram import Router
@@ -744,7 +752,8 @@ async def on_shutdown():
 @app.post(WEBHOOK_PATH)
 async def handle_webhook(request: Request):
     try:
-        update = await request.json()
+        data = await request.json()
+        update = Update.model_validate(data)
         await dp.feed_update(bot, update)
         return Response(status_code=200)
     except Exception as e:
