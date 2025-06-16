@@ -706,12 +706,13 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def on_startup():
-    initialize_database()
+    initialize_database()  # 💥 MAKE SURE THIS IS INCLUDED
     dp.include_router(router)
     dp.include_router(admin_router)
     dp.services_cache = []
     await bot.set_webhook(WEBHOOK_URL)
-    logging.info("✅ Webhook set at " + WEBHOOK_URL)
+    logging.info("🚀 Webhook set successfully")
+
 
 
 @app.on_event("shutdown")
