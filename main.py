@@ -512,7 +512,7 @@ async def add_balance_cmd(m: Message):
         return await m.answer("❌ Unauthorized.")
     parts = m.text.split()
     if len(parts) != 3:
-        return await m.answer("Usage: /addbalance <user_id> <amount>")
+        return await m.answer("Usage: /addbalance \\<user_id\\> \\<amount\\>")
     try:
         uid = int(parts[1])
         amt = float(parts[2])
@@ -526,8 +526,8 @@ async def add_balance_cmd(m: Message):
     cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amt, uid))
     conn.commit()
 
-    await m.answer(f"✅ ₹{amt:.2f} added to user {uid}")
-    await bot.send_message(uid, f"✅ ₹{amt:.2f} has been added to your wallet by the admin.")
+    await m.answer(f"✅ ₹{amt:.2f} added to user `{uid}`", parse_mode=ParseMode.MARKDOWN)
+    await bot.send_message(uid, f"✅ ₹{amt:.2f} has been added to your wallet by the admin.", parse_mode=ParseMode.MARKDOWN)
 
 # --- /deduct command ---
 @router.message(Command("deduct"))
