@@ -749,17 +749,14 @@ async def on_shutdown():
     logging.info("❌ Webhook deleted")
 
 
+from aiogram.types import Update
 @app.post(WEBHOOK_PATH)
 async def handle_webhook(request: Request):
-    try:
-        data = await request.json()
-        update = Update.model_validate(data)
-        await dp.feed_update(bot, update)
-        return Response(status_code=200)
-    except Exception as e:
-        import traceback
-        print("❌ Webhook error:\n", traceback.format_exc())  # Shows error in logs
-        return Response(status_code=500)
+    data = await request.json()
+    update = Update(**data)  # ✅ Correct parsing
+    await dp.feed_update(bot, update)
+    return Response(status_code=200)
+
 
 
 
