@@ -145,17 +145,24 @@ def upi_keyboard():
         [InlineKeyboardButton(text="✅ I Paid", callback_data="paid_done")]
     ])
 # --- ROUTER SETUP ---
+from aiogram.filters import Command
 router = Router()
 
-@router.message(F.text == "/start")
+@router.message(Command("start"))
 async def cmd_start(m: Message, state: FSMContext):
-    row = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
-    if row:
-        bal = row[0]
-        await m.answer(f"👋 Welcome back!\n💰 Balance: ₹{bal:.2f}", reply_markup=main_menu(bal))
-    else:
-        await m.answer("👋 Welcome! Please enter your full name:")
-        await state.set_state(Register.name)
+    try:
+        row = cur.execute("SELECT balance FROM users WHERE user_id=?", (m.from_user.id,)).fetchone()
+        if row and row[0] is not None:
+            bal = row[0]
+            await m.answer(f"👋 Welcome back!\n💰 Balance: ₹{bal:.2f}", reply_markup=main_menu(bal))
+        else:
+            await m.answer("👋 Welcome! Please enter your full name:")
+            await state.set_state(Register.name)
+    except Exception as e:
+        await m.answer("⚠️ An error occurred in /start.")
+        print(f"Error in /start: {e}")
+
+    await state.set_state(Register.name)
 
 @router.message(Register.name)
 async def reg_name(m: Message, state: FSMContext):
