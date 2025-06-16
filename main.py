@@ -24,7 +24,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # --- CONFIG ---
 
 ADMIN_ID = 5274097505
-GROUP_ID = -1001234567890
+GROUP_ID = -4651688106
 SMM_API_KEY = "030721af5eaea75a86f77ebda0c74209"
 SMM_API_URL = "https://easysmmpanel.com/api/v2"
 UPI_ID = "kyakamhai@ybl"
