@@ -24,7 +24,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # --- CONFIG ---
 
 ADMIN_ID = 5274097505
-GROUP_ID = -4651688106
+
 SMM_API_KEY = "030721af5eaea75a86f77ebda0c74209"
 SMM_API_URL = "https://easysmmpanel.com/api/v2"
 UPI_ID = "kyakamhai@ybl"
@@ -659,22 +659,6 @@ async def stats_cmd(m: Message):
     )
     await m.answer(msg)
 
-#groupdata 
-@router.message()
-async def get_group_id(m: Message):
-    if m.chat.type in ("group", "supergroup"):
-        print(f"Group ID: {m.chat.id}")
-        await m.answer(f"This group's chat ID is: `{m.chat.id}`", parse_mode="Markdown")
-
-GROUP_ID = -4651688106  # Replace with your actual group ID
-
-@router.message(Command("testgroup"))
-async def test_group_send(m: Message):
-    await bot.send_message(GROUP_ID, "✅ Bot is able to send messages to this group!")
-    await m.answer("Test message sent to the group.")
-
-
-
 #orderupdate
 from aiogram.filters import Command
 from aiogram import Router
@@ -739,7 +723,10 @@ from starlette.responses import Response
 
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = f"https://websmmhook.onrender.com{WEBHOOK_PATH}"
+
 app = FastAPI()
+
+
 @app.on_event("startup")
 async def on_startup():
     initialize_database()  # 💥 MAKE SURE THIS IS INCLUDED
@@ -757,15 +744,12 @@ async def on_shutdown():
     logging.info("❌ Webhook deleted")
 
 
-from aiogram.types import Update
 @app.post(WEBHOOK_PATH)
 async def handle_webhook(request: Request):
     data = await request.json()
-    update = Update(**data)  # ✅ Correct parsing
+    update = Update.model_validate(data)  # Use model_validate for Pydantic v2
     await dp.feed_update(bot, update)
     return Response(status_code=200)
-
-
 
 
 @app.get("/")
