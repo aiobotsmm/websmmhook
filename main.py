@@ -819,6 +819,10 @@ from fastapi import FastAPI, Request
 from aiogram.types import Update
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from starlette.responses import Response
+from starlette.responses import JSONResponse
+from aiogram import Bot, Dispatcher
+from aiogram.types import Update
+from your_module import bot, dp, router, admin_router, initialize_database
 #from main_config import bot, dp, router, admin_router  # adjust this if needed
 
 WEBHOOK_PATH = "/webhook"
@@ -833,22 +837,20 @@ async def on_startup():
     await bot.set_webhook(WEBHOOK_URL)
     logging.info("🚀 Webhook set successfully")
 
-
-
 @app.on_event("shutdown")
 async def on_shutdown():
     await bot.delete_webhook()
     logging.info("❌ Webhook deleted")
 
-
-from aiogram.types import Update
 @app.post(WEBHOOK_PATH)
-async def handle_webhook(request: Request):
-    data = await request.json()
-    update = Update(**data)  # ✅ Correct parsing
-    await dp.feed_update(bot, update)
-    return Response(status_code=200)
-
+async def webhook_handler(request: Request):
+    try:
+        update = Update.model_validate(await request.json())  # ✅ safe parsing
+        await dp.feed_update(bot, update)
+    except Exception as e:
+        logging.error(f"❌ Webhook processing error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    return JSONResponse(status_code=200, content={"ok": True})
 
 
 
