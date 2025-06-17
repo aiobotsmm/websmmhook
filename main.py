@@ -5,6 +5,8 @@ import qrcode
 import io
 import math
 import requests
+import uvicorn
+
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.enums import ParseMode
